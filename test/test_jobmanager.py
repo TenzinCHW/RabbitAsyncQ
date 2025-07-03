@@ -16,12 +16,14 @@ def handle_result(body):
     print(f"Received results: {body}")
 
 
-@fixture
+@fixture(scope="session")
 def job_manager():
     conn = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
     jm = lambda: JobManager(conn, dummy_run, handle_result)
     t = threading.Thread(target=jm)
     t.start()
+    yield
+    t.join(timeout=1)
 
 
 def test_job(job_manager):
@@ -29,6 +31,7 @@ def test_job(job_manager):
     with pika.BlockingConnection(pika.ConnectionParameters(host="localhost")) as connection:
         channel = connection.channel()
         channel.basic_publish(exchange="", routing_key="input job", body=json.dumps({"start": 0, "stop": 3, "job_id": job_id}))
+
 
 def test_cancel(job_manager):
     job_id = os.urandom(15).hex()

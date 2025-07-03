@@ -24,7 +24,7 @@ You also need to install and run the [RabbitMQ server](https://www.rabbitmq.com/
 First, define a job function which accepts a `job_data` dictionary and `iteration` integer specifying which iteration of the job it should run and returns a dictionary of the result. Note that the `job_id` and `iteration` keys of the returned dictionary are reserved. If the job function does not insert them into the returned dictionary, they will be added automatically.
 Then, define a result handler function which accepts the results dict produced by your job function. Use the `job_id` and `iteration` keys to 
 ```
-def sample_job(job_data, iteration):
+def handle_job(job_data, iteration):
     print(f"Job {job_data['job_id']} - Iteration {iteration}: Processing...")
     time.sleep(0.5)
     return {"result": job_data["inputs"][iteration], "iteration": iteration}
@@ -40,7 +40,7 @@ import pika
 from rabbitasyncq import JobManager
 
 with pika.BlockingConnection(pika.ConnectionParameters('localhost')) as conn:
-    job_manager = JobManager(conn, sample_job, handle_result)
+    job_manager = JobManager(conn, handle_job, handle_result)
 ```
 
 On the publisher side, we need to format the message as a json string with the keys `start` and `stop`, indicating the range over which to loop (equivalent to looping over `range(start, stop)`), as well as the `job_id` string.

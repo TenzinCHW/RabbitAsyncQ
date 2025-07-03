@@ -1,12 +1,34 @@
 import json
 import threading
+from typing import Callable
+
 import pika
 
 from .job import StoppableJob
+from .messaging import send_msg, send_err, ack_msg
+
+
+def parse_json(ch: pika.channel.Channel, data: str):
+    try:
+        return json.loads(data)
+    except Exception as e:
+        err_msg = f"Incorrect JSON format for the following message:\n{body}"
+        send_msg(ch, err_msg)
+        e.add_note(err_msg)
+        raise e
+
+
+def get_job_id(ch: pika.channel.Channel, data: dict):
+    job_id = data.get('job_id')
+    if job_id is None:
+        err_msg = "No job_id found in the following message:\n{body}"
+        send_err(ch, err_msg)
+        raise ValueError(err_msg)
+    return job_id
 
 
 class JobManager:
-    def __init__(self, conn, job_fn, result_fn, exchange_opt={}, channel_opt={}):
+    def __init__(self, conn: pika.connection.Connection, job_fn: Callable, result_fn: Callable, exchange_opt={}, channel_opt={}):
         self.job_fn = job_fn
         self.result_fn = result_fn
         self.conn = conn
@@ -14,68 +36,51 @@ class JobManager:
         self.jobs = {}
         self.exchange_opt = exchange_opt
 
-        if exchange_opt:
-            self.ch.exchange_declare(**exchange_opt)
         if "queue" in channel_opt or "on_message_callback" in channel_opt:
             raise ValueError("channel_opt should not have 'queue' or 'on_message_callback' keys.")
 
         self.ch.queue_declare("input job", **channel_opt)
-        self.ch.queue_declare("stop job", **channel_opt)
-        self.ch.queue_declare("result", **channel_opt)
         self.ch.basic_consume("input job", self.accept_job)
+        self.ch.queue_declare("stop job", **channel_opt)
         self.ch.basic_consume("stop job", self.stop_job)
+        self.ch.queue_declare("result", **channel_opt)
         self.ch.basic_consume("result", self.handle_result)
+        if exchange_opt:
+            self.ch.exchange_declare(**exchange_opt)
+            self.ch.queue_bind(exchange=exchange_opt["exchange"], queue="input job", routing_key="input job")
+            self.ch.queue_bind(exchange=exchange_opt["exchange"], queue="stop job", routing_key="stop job")
+            self.ch.queue_bind(exchange=exchange_opt["exchange"], queue="result", routing_key="result")
         self.ch.start_consuming()
 
-    def process_body(self, body):
-        return json.loads(body)
+    def accept_job(self, ch: pika.channel.Channel, method: pika.frame.Method, properties: pika.spec.BasicProperties, body: bytes):
+        job_data = parse_json(self.ch, body)
 
-    def accept_job(self, ch, method, properties, body):
-        try:
-            job_data = self.process_body(body)
-        except Exception as e:
-            e.add_note(f"Incorrect JSON format for the following message:\n{body}")
-            raise e
+        job_id = get_job_id(self.ch, job_data)
 
-        job_id = job_data.get('job_id')
-        if job_id is None:
-            raise ValueError("No job_id found in the following message:\n{body}")
-
-        job_id = job_data["job_id"]
         job_thread = StoppableJob(method, self.conn, ch, job_data, job_id, self.job_fn)
         self.jobs[job_id] = job_thread
         job_thread.start()
 
 
-    def handle_result(self, ch, method, properties, body):
-        try:
-            result_data = self.process_body(body)
-        except Exception as e:
-            e.add_note(f"Incorrect JSON format for the following message:\n{body}")
-            raise e
+    def handle_result(self, ch: pika.channel.Channel, method: pika.frame.Method, properties: pika.spec.BasicProperties, body: bytes):
+        result_data = parse_json(self.ch, body)
 
-        job_id = result_data.get('job_id')
-        if job_id is None:
-            raise ValueError("No job_id found in the following message:\n{body}")
+        job_id = get_job_id(self.ch, result_data)
 
         self.result_fn(result_data)
-        ch.basic_ack(method.delivery_tag)
+        ack_msg(ch, method)
 
-    def stop_job(self, ch, method, properties, body):
-        try:
-            job_data = self.process_body(body)
-        except Exception as e:
-            e.add_note(f"Incorrect json format for the following message:\n{body}")
-            raise e
+    def stop_job(self, ch: pika.channel.Channel, method: pika.frame.Method, properties: pika.spec.BasicProperties, body: bytes):
+        job_data = parse_json(self.ch, body)
 
-        job_id = job_data.get('job_id')
-        if job_id is None:
-            raise ValueError("Job ID is required to stop a job.")
+        job_id = get_job_id(self.ch, job_data)
 
         try:
             job_thread = self.jobs.get(job_id)
             if job_thread is None:
-                print(f"No job found with ID: {job_id}, skipping.")
+                err_msg = f"No job found with ID: {job_id}, skipping."
+                send_err(self.ch, err_msg)
+                print(err_msg)
             else:
                 job_thread.stop()
                 job_thread.join()
@@ -83,8 +88,10 @@ class JobManager:
                 del self.jobs[job_id]
 
         except Exception as e:
-            e.add_note(f"Error stopping job {job_id}.")
+            err_msg = f"Error stopping job {job_id}."
+            send_err(self.ch, err_msg)
+            e.add_note(err_msg)
             raise e
 
         finally:
-            ch.basic_ack(delivery_tag=method.delivery_tag)
+            ack_msg(ch, method)
