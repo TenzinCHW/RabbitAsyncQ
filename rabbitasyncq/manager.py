@@ -36,7 +36,9 @@ class JobManager:
             self.ch.queue_bind(exchange=exchange_opt["exchange"], queue=input_job_qname, routing_key=input_job_qname)
             self.ch.queue_bind(exchange=exchange_opt["exchange"], queue=stop_job_qname, routing_key=stop_job_qname)
             self.ch.queue_bind(exchange=exchange_opt["exchange"], queue=result_qname, routing_key=result_qname)
-        self.ch.start_consuming()
+        consume_thread = threading.Thread(target=self.ch.start_consuming)
+        consume_thread.start()
+        #self.ch.start_consuming()
 
     def accept_job(self, ch: pika.channel.Channel, method: pika.frame.Method, properties: pika.spec.BasicProperties, body: bytes):
         try:
