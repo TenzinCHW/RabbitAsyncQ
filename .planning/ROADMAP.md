@@ -29,7 +29,11 @@ Plans:
   1. Incoming RabbitMQ messages automatically trigger job execution in an available pool process.
   2. Intermediate yielded results from workers are forwarded to RabbitMQ without blocking the main event loop.
   3. The RabbitMQ connection remains active (heartbeat maintained) while CPU-intensive tasks run in the background.
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Process Pool Optimization & Prefetch Limit
+- [ ] 02-02-PLAN.md — Blocking Start and Signal Handling
 
 ### Phase 3: Resilience & Crash Recovery
 **Goal**: The system recovers cleanly from worker crashes and maintains stable process lifecycles.
@@ -46,5 +50,5 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Worker Execution & IPC | 1/1 | Complete   | 2026-03-28 |
-| 2. Broker Integration & Execution Pool | 0/0 | Not started | - |
+| 2. Broker Integration & Execution Pool | 0/2 | Not started | - |
 | 3. Resilience & Crash Recovery | 0/0 | Not started | - |
