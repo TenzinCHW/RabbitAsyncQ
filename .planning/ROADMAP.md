@@ -16,7 +16,10 @@
   1. A Python generator executes in an isolated worker process without blocking the main process.
   2. The main process receives yielded values from the worker in real-time via a lock-free IPC queue.
   3. The main process can signal cancellation, and the worker cleanly exits after running `finally` cleanup.
-**Plans**: TBD
+**Plans**: 1 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Refactor JobManager to execute jobs in isolated processes via IPC queue
 
 ### Phase 2: Broker Integration & Execution Pool
 **Goal**: The RabbitMQ consumer can dispatch jobs to a process pool and publish results without dropping connections.
@@ -42,6 +45,6 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Worker Execution & IPC | 0/0 | Not started | - |
+| 1. Worker Execution & IPC | 0/1 | Not started | - |
 | 2. Broker Integration & Execution Pool | 0/0 | Not started | - |
 | 3. Resilience & Crash Recovery | 0/0 | Not started | - |
