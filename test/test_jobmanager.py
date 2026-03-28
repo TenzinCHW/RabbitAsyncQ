@@ -6,6 +6,8 @@ import json
 import time
 import threading
 
+results_list = []
+
 
 def dummy_run(body):
     for i in range(body["var"]):
@@ -20,45 +22,50 @@ def exception_run(body):
 
 
 def handle_result(body):
-    if body.get("status") == "SUCCESS":
-        assert body["nyaa"] % 5 == 0
+    results_list.append(body)
     print(f"Received results: {body}")
 
 
 def handle_exception_result(body):
-    if body.get("status") == "ERROR":
-        print("Got an error from job function")
+    results_list.append(body)
     print(f"Received results: {body}")
 
 
-@fixture(scope="session")
+@fixture(scope="function")
 def job_manager():
+    global results_list
+    results_list = []
     conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
     jm = JobManager("test_job_name", conn, dummy_run, handle_result)
     t = threading.Thread(target=jm.start)
     t.start()
     time.sleep(0.5)
     yield jm
-    jm.shutdown()
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
     t.join()
-    jm.conn.close()
+    if not jm.conn.is_closed:
+        jm.conn.close()
 
 
-@fixture
+@fixture(scope="function")
 def job_manager_exception():
+    global results_list
+    results_list = []
     conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
     jm = JobManager("fail_test_job_name", conn, exception_run, handle_exception_result)
     t = threading.Thread(target=jm.start)
     t.start()
     time.sleep(0.5)
     yield jm
-    jm.shutdown()
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
     t.join()
-    jm.conn.close()
+    if not jm.conn.is_closed:
+        jm.conn.close()
 
 
 def test_job(job_manager):
-    print(job_manager)
     job_id = os.urandom(15).hex()
     with pika.BlockingConnection(
         pika.ConnectionParameters(host="localhost")
@@ -71,6 +78,14 @@ def test_job(job_manager):
         )
         time.sleep(3.0)  # Wait for job to finish
 
+    # We should have two running results and one success
+    assert len(results_list) == 3
+    assert results_list[0]["status"] == "RUNNING"
+    assert results_list[0]["nyaa"] == 0
+    assert results_list[1]["status"] == "RUNNING"
+    assert results_list[1]["nyaa"] == 5
+    assert results_list[2]["status"] == "SUCCESS"
+
 
 def test_cancel(job_manager):
     job_id = os.urandom(15).hex()
@@ -81,15 +96,19 @@ def test_cancel(job_manager):
         channel.basic_publish(
             exchange="",
             routing_key="test_job_name input job",
-            body=json.dumps({"var": 2, "job_id": job_id}),
+            body=json.dumps({"var": 5, "job_id": job_id}),
         )
-        time.sleep(1.0)
+        time.sleep(1.5)
         channel.basic_publish(
             exchange="",
             routing_key="test_job_name stop job",
             body=json.dumps({"job_id": job_id}),
         )
-        time.sleep(1.0)  # Wait for stop to propagate
+        time.sleep(1.5)  # Wait for stop to propagate
+
+    assert len(results_list) > 0
+    assert any(r["status"] == "STOPPED" for r in results_list)
+    assert not any(r["status"] == "SUCCESS" for r in results_list)
 
 
 def test_exception_run(job_manager_exception):
@@ -104,3 +123,7 @@ def test_exception_run(job_manager_exception):
             body=json.dumps({"var": 2, "job_id": job_id}),
         )
         time.sleep(1.0)  # Wait for exception to propagate
+
+    assert len(results_list) == 1
+    assert results_list[0]["status"] == "ERROR"
+    assert "ValueError" in results_list[0]["message"]

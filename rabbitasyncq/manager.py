@@ -8,6 +8,10 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
 import pika
+import pika.connection
+import pika.channel
+import pika.frame
+import pika.spec
 
 from .job import process_worker, ProcessJobContext
 from .messaging import Messenger
