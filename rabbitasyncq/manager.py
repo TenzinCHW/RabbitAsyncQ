@@ -1,3 +1,4 @@
+import os
 import json
 import threading
 import multiprocessing
@@ -20,19 +21,31 @@ class JobManager:
         result_fn: Callable,
         exchange_opt={},
         channel_opt={},
+        max_workers: int | None = None,
     ):
         self.name = name
         self.job_fn = job_fn
         self.result_fn = result_fn
         self.conn = conn
         self.ch = conn.channel()
+
+        if max_workers is None:
+            try:
+                self.max_workers = len(os.sched_getaffinity(0))
+            except AttributeError:
+                self.max_workers = os.cpu_count() or 1
+        else:
+            self.max_workers = max_workers
+
+        self.ch.basic_qos(prefetch_count=self.max_workers)
+
         self.jobs = {}
         self.exchange_opt = exchange_opt
         self.messenger = Messenger(conn, self.ch, name)
 
         self.manager = multiprocessing.Manager()
         self.ipc_queue = self.manager.Queue()
-        self.executor = ProcessPoolExecutor()
+        self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
 
         if "queue" in channel_opt or "on_message_callback" in channel_opt:
             raise ValueError(
