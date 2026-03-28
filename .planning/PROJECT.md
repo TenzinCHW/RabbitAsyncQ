@@ -17,14 +17,13 @@ Reliable, interruptible execution of compute-intensive Python jobs driven by Rab
 - ✓ Gracefully cancel running jobs via RabbitMQ stop messages
 - ✓ Publish job status updates and final results back to RabbitMQ
 - ✓ Maintain message broker connections and process AMQP events
+- ✓ Execute jobs using a process pool or process-based executor instead of threads (Validated in Phase 01: worker-execution-ipc)
+- ✓ Ensure job cancellation works correctly across process boundaries (Validated in Phase 01: worker-execution-ipc)
+- ✓ Maintain the existing `yield`-based job function interface (Validated in Phase 01: worker-execution-ipc)
+- ✓ Safely communicate intermediate results from worker processes back to the main RabbitMQ consumer process (Validated in Phase 01: worker-execution-ipc)
+- ✓ Prevent zombie processes and manage process lifecycle safely (Validated in Phase 01: worker-execution-ipc)
 
 ### Active
-
-- [ ] Execute jobs using a process pool or process-based executor instead of threads
-- [ ] Ensure job cancellation works correctly across process boundaries
-- [ ] Maintain the existing `yield`-based job function interface
-- [ ] Safely communicate intermediate results from worker processes back to the main RabbitMQ consumer process
-- [ ] Prevent zombie processes and manage process lifecycle safely
 
 ### Out of Scope
 
@@ -46,7 +45,7 @@ The main process runs the Pika consumer which listens to RabbitMQ. Transitioning
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Move to Processes | Threads block the GIL for compute-bound tasks, limiting scalability. | — Pending |
+| Move to Processes | Threads block the GIL for compute-bound tasks, limiting scalability. | ✓ Validated in Phase 01 |
 
 ## Evolution
 
@@ -66,4 +65,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after initialization*
+*Last updated: 2026-03-28 after Phase 01 completion*
