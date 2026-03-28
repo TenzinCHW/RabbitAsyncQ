@@ -1,6 +1,6 @@
 [project]
 name = "rabbitasyncq"
-version = "0.1.0"
+version = "0.2.0"
 description = "Asynchronous job queue using RabbitMQ as a broker. Allows cancellation of job and processing intermediary results."
 authors = [
     {name = "Tenzin Chan",email = "tenzinchan@protonmail.com"}
