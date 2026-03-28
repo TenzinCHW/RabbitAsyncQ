@@ -27,4 +27,11 @@
 
 ## Traceability
 
-*(To be filled by the roadmapper)*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| EXEC-01 | Phase 2 | Pending |
+| EXEC-02 | Phase 1 | Pending |
+| EXEC-03 | Phase 2 | Pending |
+| EXEC-04 | Phase 3 | Pending |
+| LIFE-01 | Phase 1 | Pending |
+| LIFE-02 | Phase 1 | Pending |

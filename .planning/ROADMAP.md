@@ -1,0 +1,47 @@
+# Project Roadmap
+
+## Phases
+
+- [ ] **Phase 1: Worker Execution & IPC** - Execute generator jobs in isolated processes and safely stream results via IPC.
+- [ ] **Phase 2: Broker Integration & Execution Pool** - Dispatch RabbitMQ jobs to the process pool and publish results while maintaining connection heartbeats.
+- [ ] **Phase 3: Resilience & Crash Recovery** - Handle worker crashes gracefully by detecting failures and NACKing messages.
+
+## Phase Details
+
+### Phase 1: Worker Execution & IPC
+**Goal**: Jobs can execute in isolated processes and safely stream results back via IPC.
+**Depends on**: None
+**Requirements**: EXEC-02, LIFE-01, LIFE-02
+**Success Criteria** (what must be TRUE):
+  1. A Python generator executes in an isolated worker process without blocking the main process.
+  2. The main process receives yielded values from the worker in real-time via a lock-free IPC queue.
+  3. The main process can signal cancellation, and the worker cleanly exits after running `finally` cleanup.
+**Plans**: TBD
+
+### Phase 2: Broker Integration & Execution Pool
+**Goal**: The RabbitMQ consumer can dispatch jobs to a process pool and publish results without dropping connections.
+**Depends on**: Phase 1
+**Requirements**: EXEC-01, EXEC-03
+**Success Criteria** (what must be TRUE):
+  1. Incoming RabbitMQ messages automatically trigger job execution in an available pool process.
+  2. Intermediate yielded results from workers are forwarded to RabbitMQ without blocking the main event loop.
+  3. The RabbitMQ connection remains active (heartbeat maintained) while CPU-intensive tasks run in the background.
+**Plans**: TBD
+
+### Phase 3: Resilience & Crash Recovery
+**Goal**: The system recovers cleanly from worker crashes and maintains stable process lifecycles.
+**Depends on**: Phase 2
+**Requirements**: EXEC-04
+**Success Criteria** (what must be TRUE):
+  1. The main process detects when a worker process terminates unexpectedly (e.g., system kill or crash).
+  2. The system NACKs the corresponding RabbitMQ message upon worker failure to allow queue retries.
+  3. The system safely cleans up process handles and prevents zombie processes.
+**Plans**: TBD
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Worker Execution & IPC | 0/0 | Not started | - |
+| 2. Broker Integration & Execution Pool | 0/0 | Not started | - |
+| 3. Resilience & Crash Recovery | 0/0 | Not started | - |
