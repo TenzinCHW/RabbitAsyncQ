@@ -4,7 +4,7 @@
 
 - [x] **Phase 1: Worker Execution & IPC** - Execute generator jobs in isolated processes and safely stream results via IPC. (completed 2026-03-28)
 - [x] **Phase 2: Broker Integration & Execution Pool** - Dispatch RabbitMQ jobs to the process pool and publish results while maintaining connection heartbeats. (completed 2026-03-28)
-- [ ] **Phase 3: Resilience & Crash Recovery** - Handle worker crashes gracefully by detecting failures and NACKing messages.
+- [x] **Phase 3: Resilience & Crash Recovery** - Handle worker crashes gracefully by detecting failures and NACKing messages. (completed 2026-03-28)
 
 ## Phase Details
 
@@ -54,4 +54,4 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Worker Execution & IPC | 1/1 | Complete   | 2026-03-28 |
 | 2. Broker Integration & Execution Pool | 2/2 | Complete | 2026-03-28 |
-| 3. Resilience & Crash Recovery | 0/0 | Not started | - |
+| 3. Resilience & Crash Recovery | 0/0 | Complete    | 2026-03-28 |
