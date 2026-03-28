@@ -21,6 +21,13 @@ def exception_run(body):
     )
 
 
+def crash_run(body):
+    import os
+    import signal
+
+    os.kill(os.getpid(), signal.SIGKILL)
+
+
 def handle_result(body):
     results_list.append(body)
     print(f"Received results: {body}")
@@ -54,6 +61,23 @@ def job_manager_exception():
     results_list = []
     conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
     jm = JobManager("fail_test_job_name", conn, exception_run, handle_exception_result)
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
+
+
+@fixture(scope="function")
+def job_manager_crash():
+    global results_list
+    results_list = []
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    jm = JobManager("crash_test_job_name", conn, crash_run, handle_exception_result)
     t = threading.Thread(target=jm.start)
     t.start()
     time.sleep(0.5)
@@ -127,3 +151,30 @@ def test_exception_run(job_manager_exception):
     assert len(results_list) == 1
     assert results_list[0]["status"] == "ERROR"
     assert "ValueError" in results_list[0]["message"]
+
+
+from unittest.mock import patch, ANY
+
+
+@patch("os._exit")
+def test_worker_hard_crash(mock_os_exit, job_manager_crash):
+    job_id = os.urandom(15).hex()
+
+    with patch.object(job_manager_crash.ch, "basic_nack") as mock_basic_nack:
+        with pika.BlockingConnection(
+            pika.ConnectionParameters(host="localhost")
+        ) as connection:
+            channel = connection.channel()
+            channel.basic_publish(
+                exchange="",
+                routing_key="crash_test_job_name input job",
+                body=json.dumps({"var": 2, "job_id": job_id}),
+            )
+            time.sleep(2.0)  # Wait for crash and callback to execute
+
+        # Verify basic_nack was called with requeue=False
+        assert mock_basic_nack.called
+        mock_basic_nack.assert_called_with(delivery_tag=ANY, requeue=False)
+
+        # Verify os._exit(1) was called
+        mock_os_exit.assert_called_with(1)

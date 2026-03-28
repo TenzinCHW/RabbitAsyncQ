@@ -159,6 +159,30 @@ class JobManager:
                 )
                 del self.jobs[job_id]
 
+    def _handle_future_done(self, future, job_id=None):
+        try:
+            exc = future.exception()
+        except Exception:
+            return
+
+        if exc is not None and type(exc).__name__ in [
+            "BrokenProcessPool",
+            "TerminatedWorkerError",
+        ]:
+            ctx = self.jobs.get(job_id)
+            if ctx:
+                self.conn.add_callback_threadsafe(
+                    lambda c=ctx: c.ch.basic_nack(
+                        delivery_tag=c.method.delivery_tag, requeue=False
+                    )
+                )
+                del self.jobs[job_id]
+            print(f"Worker process crashed for job {job_id}: {exc}")
+            import sys
+            import os
+
+            os._exit(1)
+
     def accept_job(
         self,
         ch: pika.channel.Channel,
@@ -181,6 +205,9 @@ class JobManager:
 
         future = self.executor.submit(
             process_worker, job_id, self.job_fn, job_data, self.ipc_queue, stop_event
+        )
+        future.add_done_callback(
+            functools.partial(self._handle_future_done, job_id=job_id)
         )
         job_ctx.future = future
 
