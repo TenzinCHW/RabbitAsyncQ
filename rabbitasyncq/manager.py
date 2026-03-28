@@ -3,6 +3,7 @@ import json
 import threading
 import multiprocessing
 import functools
+import signal
 from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
@@ -82,8 +83,20 @@ class JobManager:
         self.ipc_thread = threading.Thread(target=self._consume_ipc)
         self.ipc_thread.start()
 
-        self.consume_thread = threading.Thread(target=self.ch.start_consuming)
-        self.consume_thread.start()
+    def start(self):
+        def _sig_handler(signum, frame):
+            print(f"Received signal {signum}, stopping consumer...")
+            self.conn.add_callback_threadsafe(self.ch.stop_consuming)
+
+        try:
+            signal.signal(signal.SIGINT, _sig_handler)
+            signal.signal(signal.SIGTERM, _sig_handler)
+        except ValueError:
+            # signal only works in main thread
+            pass
+
+        self.ch.start_consuming()
+        self.shutdown()
 
     def _consume_ipc(self):
         while True:
@@ -206,8 +219,6 @@ class JobManager:
 
     def shutdown(self):
         self.conn.add_callback_threadsafe(self.ch.stop_consuming)
-        if self.consume_thread.is_alive():
-            self.consume_thread.join()
         self.ipc_queue.put(None)
         if self.ipc_thread.is_alive():
             self.ipc_thread.join()

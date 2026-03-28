@@ -35,8 +35,12 @@ def handle_exception_result(body):
 def job_manager():
     conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
     jm = JobManager("test_job_name", conn, dummy_run, handle_result)
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
     yield jm
     jm.shutdown()
+    t.join()
     jm.conn.close()
 
 
@@ -44,8 +48,12 @@ def job_manager():
 def job_manager_exception():
     conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
     jm = JobManager("fail_test_job_name", conn, exception_run, handle_exception_result)
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
     yield jm
     jm.shutdown()
+    t.join()
     jm.conn.close()
 
 
