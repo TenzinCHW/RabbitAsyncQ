@@ -1,61 +1,45 @@
 import json
-import threading
-from typing import Callable
-
+import multiprocessing
+from typing import Callable, Any
 import pika
 
 from .messaging import Messenger
 
 
-class StoppableThread(threading.Thread):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._stop_event = threading.Event()
+def process_worker(job_id: str, job_fn: Callable, body: bytes, ipc_queue, stop_event):
+    print(f"Starting job {job_id}")
+    try:
+        for result in job_fn(body):
+            if stop_event.is_set():
+                ipc_queue.put({"job_id": job_id, "type": "stopped"})
+                print(f"Stopped job {job_id}")
+                return
+
+            job_id_res = result.get("job_id")
+            if job_id_res is None or job_id_res != job_id:
+                result["job_id"] = job_id
+            result["status"] = "RUNNING"
+
+            ipc_queue.put({"job_id": job_id, "type": "result", "payload": result})
+
+        print(f"Finished job {job_id}")
+        ipc_queue.put({"job_id": job_id, "type": "done"})
+    except Exception as e:
+        err_msg = repr(e)
+        ipc_queue.put({"job_id": job_id, "type": "error", "message": err_msg})
+
+
+class ProcessJobContext:
+    def __init__(
+        self, job_id: str, method, ch, name: str, stop_event, messenger: Messenger
+    ):
+        self.job_id = job_id
+        self.method = method
+        self.ch = ch
+        self.name = name
+        self.stop_event = stop_event
+        self.messenger = messenger
+        self.future: Any = None
 
     def stop(self):
-        self._stop_event.set()
-
-    @property
-    def stopped(self):
-        return self._stop_event.is_set()
-
-
-class StoppableJob(StoppableThread):
-    def __init__(self, method: pika.frame.Method, conn: pika.connection.Connection, ch: pika.channel.Channel, name: str, body: bytes, job_id: str, job_fn: Callable):
-        # TODO add callback for logging
-        super().__init__()
-        self.name = name
-        self.job_id = job_id
-        self.job_fn = job_fn
-        self.body = body
-        self.conn = conn
-        self.method = method
-        self.messenger = Messenger(conn, ch, name)
-
-    def run(self):
-        print(f"Starting job {self.job_id}")
-        try:
-            for result in self.job_fn(self.body):
-                if self.stopped:
-                    self.conn.add_callback_threadsafe(lambda: self.messenger.send_stop(self.job_id))
-                    self.conn.add_callback_threadsafe(lambda: self.messenger.ack_msg(self.method))
-                    print(f"Stopped job {self.job_id}")
-                    return
-
-                job_id = result.get("job_id")
-                if job_id is None or job_id != self.job_id:
-                    result["job_id"] = self.job_id
-                result["status"] = "RUNNING"
-
-                self.conn.add_callback_threadsafe(lambda: self.messenger.send_msg(f"{self.name} result", json.dumps(result)))
-        except Exception as e:
-            err_msg = repr(e)
-            message = {"status": "ERROR", "message": err_msg, "job_id": self.job_id}
-            self.conn.add_callback_threadsafe(lambda: self.messenger.send_msg(f"{self.name} result", json.dumps(message)))
-            self.conn.add_callback_threadsafe(lambda: self.messenger.ack_msg(self.method))
-            raise e
-
-        print(f"Finished job {self.job_id}")
-        self.conn.add_callback_threadsafe(lambda: self.messenger.send_done(self.job_id))
-        self.conn.add_callback_threadsafe(lambda: self.messenger.send_msg(f"{self.name} stop job", json.dumps({"job_id": self.job_id})))
-        self.conn.add_callback_threadsafe(lambda: self.messenger.ack_msg(self.method))
+        self.stop_event.set()
