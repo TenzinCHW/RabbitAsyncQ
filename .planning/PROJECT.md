@@ -24,6 +24,8 @@ Reliable, interruptible execution of compute-intensive Python jobs driven by Rab
 - ✓ Prevent zombie processes and manage process lifecycle safely (Validated in Phase 01: worker-execution-ipc)
 - ✓ Execute jobs using a Multi-Process Execution Pool and match RabbitMQ prefetch limits (Validated in Phase 02: broker-integration-execution-pool)
 - ✓ Main process maintains Broker Heartbeat during long-running tasks without blocking (Validated in Phase 02: broker-integration-execution-pool)
+- ✓ System detects dead worker processes and routes poison-pill messages to DLQ via NACK (Validated in Phase 03: resilience-crash-recovery)
+- ✓ JobManager gracefully degrades via Fail Fast when the process pool breaks (Validated in Phase 03: resilience-crash-recovery)
 
 ### Active
 
@@ -67,4 +69,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 02 completion*
+*Last updated: 2026-03-28 after Phase 03 completion*
