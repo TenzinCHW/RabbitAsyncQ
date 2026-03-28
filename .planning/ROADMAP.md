@@ -43,7 +43,10 @@ Plans:
   1. The main process detects when a worker process terminates unexpectedly (e.g., system kill or crash).
   2. The system NACKs the corresponding RabbitMQ message upon worker failure to allow queue retries.
   3. The system safely cleans up process handles and prevents zombie processes.
-**Plans**: TBD
+**Plans**: 1 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Implement crash recovery and process pool monitoring
 
 ## Progress
 
