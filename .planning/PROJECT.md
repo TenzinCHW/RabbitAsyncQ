@@ -22,6 +22,8 @@ Reliable, interruptible execution of compute-intensive Python jobs driven by Rab
 - ✓ Maintain the existing `yield`-based job function interface (Validated in Phase 01: worker-execution-ipc)
 - ✓ Safely communicate intermediate results from worker processes back to the main RabbitMQ consumer process (Validated in Phase 01: worker-execution-ipc)
 - ✓ Prevent zombie processes and manage process lifecycle safely (Validated in Phase 01: worker-execution-ipc)
+- ✓ Execute jobs using a Multi-Process Execution Pool and match RabbitMQ prefetch limits (Validated in Phase 02: broker-integration-execution-pool)
+- ✓ Main process maintains Broker Heartbeat during long-running tasks without blocking (Validated in Phase 02: broker-integration-execution-pool)
 
 ### Active
 
@@ -65,4 +67,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 01 completion*
+*Last updated: 2026-03-28 after Phase 02 completion*
