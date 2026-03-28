@@ -46,7 +46,7 @@ Plans:
 **Plans**: 1 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Implement crash recovery and process pool monitoring
+- [x] 03-01-PLAN.md — Implement crash recovery and process pool monitoring
 
 ## Progress
 
@@ -54,4 +54,4 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Worker Execution & IPC | 1/1 | Complete   | 2026-03-28 |
 | 2. Broker Integration & Execution Pool | 2/2 | Complete | 2026-03-28 |
-| 3. Resilience & Crash Recovery | 0/0 | Complete    | 2026-03-28 |
+| 3. Resilience & Crash Recovery | 1/1 | Complete    | 2026-03-28 |
