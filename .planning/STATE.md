@@ -49,5 +49,5 @@ Plan: Not started
 ## Session Continuity
 
 - **Last session**: 2026-03-28
-- **Stopped at**: Phase 3 execution complete
-- **Resume file**: .planning/phases/03-resilience-crash-recovery/03-01-SUMMARY.md
+- **Stopped at**: Milestone v1.0 complete
+- **Resume file**: None
