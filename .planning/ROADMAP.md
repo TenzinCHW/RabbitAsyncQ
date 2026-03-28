@@ -32,7 +32,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Process Pool Optimization & Prefetch Limit
+- [x] 02-01-PLAN.md — Process Pool Optimization & Prefetch Limit
 - [ ] 02-02-PLAN.md — Blocking Start and Signal Handling
 
 ### Phase 3: Resilience & Crash Recovery

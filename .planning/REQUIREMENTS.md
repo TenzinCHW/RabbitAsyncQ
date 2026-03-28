@@ -3,7 +3,7 @@
 ## v1 Requirements
 
 ### Execution
-- [ ] **EXEC-01**: System uses a Multi-Process Execution Pool to run jobs, bypassing the Python GIL for compute-heavy tasks.
+- [x] **EXEC-01**: System uses a Multi-Process Execution Pool to run jobs, bypassing the Python GIL for compute-heavy tasks.
 - [x] **EXEC-02**: System implements Robust IPC to send results from worker processes back to the main process safely.
 - [ ] **EXEC-03**: Main process maintains Broker Heartbeat during long-running tasks without blocking.
 - [ ] **EXEC-04**: System supports Crash Recovery to detect dead worker processes and nack jobs/respawn as needed.
@@ -29,7 +29,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXEC-01 | Phase 2 | Pending |
+| EXEC-01 | Phase 2 | Complete |
 | EXEC-02 | Phase 1 | Complete |
 | EXEC-03 | Phase 2 | Pending |
 | EXEC-04 | Phase 3 | Pending |
