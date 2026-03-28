@@ -33,7 +33,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Process Pool Optimization & Prefetch Limit
-- [ ] 02-02-PLAN.md — Blocking Start and Signal Handling
+- [x] 02-02-PLAN.md — Blocking Start and Signal Handling
 
 ### Phase 3: Resilience & Crash Recovery
 **Goal**: The system recovers cleanly from worker crashes and maintains stable process lifecycles.
