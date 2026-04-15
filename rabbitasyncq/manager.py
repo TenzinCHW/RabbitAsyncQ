@@ -84,7 +84,7 @@ class JobManager:
                 routing_key=result_qname,
             )
 
-        self.ipc_thread = threading.Thread(target=self._consume_ipc)
+        self.ipc_thread = threading.Thread(target=self._consume_ipc, daemon=True)
         self.ipc_thread.start()
 
     def start(self):
@@ -99,12 +99,18 @@ class JobManager:
             # signal only works in main thread
             pass
 
-        self.ch.start_consuming()
-        self.shutdown()
+        try:
+            self.ch.start_consuming()
+        finally:
+            self.shutdown()
 
     def _consume_ipc(self):
         while True:
-            msg = self.ipc_queue.get()
+            try:
+                msg = self.ipc_queue.get()
+            except (EOFError, BrokenPipeError, ConnectionResetError):
+                break
+
             if msg is None:
                 break
 

@@ -10,9 +10,12 @@ def process_worker(job_id: str, job_fn: Callable, body: bytes, ipc_queue, stop_e
     print(f"Starting job {job_id}")
     try:
         for result in job_fn(body):
-            if stop_event.is_set():
-                ipc_queue.put({"job_id": job_id, "type": "stopped"})
-                print(f"Stopped job {job_id}")
+            try:
+                if stop_event.is_set():
+                    ipc_queue.put({"job_id": job_id, "type": "stopped"})
+                    print(f"Stopped job {job_id}")
+                    return
+            except (EOFError, BrokenPipeError, ConnectionResetError):
                 return
 
             job_id_res = result.get("job_id")
@@ -20,13 +23,24 @@ def process_worker(job_id: str, job_fn: Callable, body: bytes, ipc_queue, stop_e
                 result["job_id"] = job_id
             result["status"] = "RUNNING"
 
-            ipc_queue.put({"job_id": job_id, "type": "result", "payload": result})
+            try:
+                ipc_queue.put({"job_id": job_id, "type": "result", "payload": result})
+            except (EOFError, BrokenPipeError, ConnectionResetError):
+                return
 
         print(f"Finished job {job_id}")
-        ipc_queue.put({"job_id": job_id, "type": "done"})
+        try:
+            ipc_queue.put({"job_id": job_id, "type": "done"})
+        except (EOFError, BrokenPipeError, ConnectionResetError):
+            return
     except Exception as e:
+        if type(e).__name__ in ["EOFError", "BrokenPipeError", "ConnectionResetError"]:
+            return
         err_msg = repr(e)
-        ipc_queue.put({"job_id": job_id, "type": "error", "message": err_msg})
+        try:
+            ipc_queue.put({"job_id": job_id, "type": "error", "message": err_msg})
+        except (EOFError, BrokenPipeError, ConnectionResetError):
+            pass
 
 
 class ProcessJobContext:
