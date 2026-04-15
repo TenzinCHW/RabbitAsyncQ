@@ -53,7 +53,7 @@ def handle_result(result_data):
 ### Set up the Job Manager
 A RabbitMQ cluster can be used, but we are using `localhost` here as an example. The `JobManager` will automatically scale the process pool size based on the available cgroups/CPU cores.
 
-To start processing messages, call the blocking `.start()` method on your `JobManager` instance. It will automatically intercept `SIGINT`/`SIGTERM` to perform a graceful shutdown of the worker pool and connection.
+To start processing messages, call the blocking `.start()` method on your `JobManager` instance. It will automatically intercept `SIGINT`/`SIGTERM` to gracefully cancel all currently running jobs and safely wait for the process pool to clean up, preventing orphaned processes or errors.
 
 ```python
 import pika

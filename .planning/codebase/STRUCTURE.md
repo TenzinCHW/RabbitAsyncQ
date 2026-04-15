@@ -1,6 +1,6 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-03-28
+**Analysis Date:** 2026-04-15
 
 ## Directory Layout
 
@@ -8,20 +8,21 @@
 [project-root]/
 ├── rabbitasyncq/       # Core library package
 │   ├── __init__.py     # Package exports
-│   ├── job.py          # Stoppable job thread logic
-│   ├── manager.py      # Main entry point and queue management
+│   ├── job.py          # Process worker logic and job context
+│   ├── manager.py      # Main entry point, IPC handling, and queue management
 │   └── messaging.py    # RabbitMQ channel abstraction
 ├── test/               # Unit and integration tests
 │   ├── __init__.py     # Test package indicator
 │   └── test_jobmanager.py # Main test suite
 ├── pyproject.toml      # Poetry package manifest and dependencies
+├── uv.lock             # uv dependency lockfile
 └── README.md           # Documentation
 ```
 
 ## Directory Purposes
 
 **`rabbitasyncq/`:**
-- Purpose: The main source code directory for the package. Contains all execution logic for handling async threaded jobs from RabbitMQ.
+- Purpose: The main source code directory for the package. Contains all execution logic for handling async multiprocessing jobs from RabbitMQ.
 - Contains: Python modules representing the components of the library.
 - Key files: `rabbitasyncq/manager.py`, `rabbitasyncq/job.py`
 
@@ -37,13 +38,15 @@
 
 **Configuration:**
 - `pyproject.toml`: The standard modern Python configuration file using Poetry. Declares `pika` as the main dependency.
+- `uv.lock`: Specifies pinned dependency versions.
 
 **Core Logic:**
-- `rabbitasyncq/job.py`: Houses the `StoppableJob` thread that loops over the user's generator logic.
+- `rabbitasyncq/job.py`: Houses the `process_worker` function that loops over the user's generator logic in a separate process.
+- `rabbitasyncq/manager.py`: Handles IPC messages from workers and interacts with RabbitMQ.
 - `rabbitasyncq/messaging.py`: Manages basic communication with the RabbitMQ broker via the `pika` library.
 
 **Testing:**
-- `test/test_jobmanager.py`: Tests error handling, successful job executions, and job cancellations.
+- `test/test_jobmanager.py`: Tests error handling, process crashes, successful job executions, and job cancellations.
 
 ## Naming Conventions
 
@@ -52,10 +55,10 @@
 - Test files prefixed with `test_`: `test_jobmanager.py`
 
 **Classes:**
-- PascalCase: `JobManager`, `StoppableJob`, `Messenger`
+- PascalCase: `JobManager`, `ProcessJobContext`, `Messenger`
 
 **Functions & Variables:**
-- snake_case: `accept_job()`, `send_stop()`, `job_id`, `job_fn`
+- snake_case: `accept_job()`, `process_worker()`, `send_stop()`, `job_id`, `job_fn`
 
 ## Where to Add New Code
 
@@ -71,11 +74,11 @@
 
 ## Special Directories
 
-**`__pycache__/`:**
-- Purpose: Contains compiled Python bytecode (`.pyc` files) to speed up subsequent executions.
+**`__pycache__/`, `.pytest_cache/`, `.ruff_cache/`:**
+- Purpose: Contains compiled Python bytecode and cache files for tests/linting.
 - Generated: Yes
 - Committed: No
 
 ---
 
-*Structure analysis: 2026-03-28*
+*Structure analysis: 2026-04-15*

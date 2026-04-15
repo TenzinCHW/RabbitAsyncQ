@@ -250,8 +250,15 @@ class JobManager:
 
     def shutdown(self):
         self.conn.add_callback_threadsafe(self.ch.stop_consuming)
+
+        # Signal all running jobs to stop
+        for job_ctx in self.jobs.values():
+            job_ctx.stop()
+
         self.ipc_queue.put(None)
         if self.ipc_thread.is_alive():
             self.ipc_thread.join()
-        self.executor.shutdown(wait=False)
+
+        # Wait for workers to clean up proxies before tearing down the manager
+        self.executor.shutdown(wait=True, cancel_futures=True)
         self.manager.shutdown()
