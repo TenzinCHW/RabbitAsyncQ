@@ -153,6 +153,44 @@ def test_exception_run(job_manager_exception):
     assert "ValueError" in results_list[0]["message"]
 
 
+@fixture(scope="function")
+def job_manager_unpicklable():
+    global results_list
+    results_list = []
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    # A lambda is not picklable and will trigger a PicklingError in ProcessPoolExecutor
+    jm = JobManager(
+        "unpicklable_test_job_name", conn, lambda x: x, handle_exception_result
+    )
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
+
+
+def test_unpicklable_job(job_manager_unpicklable):
+    job_id = os.urandom(15).hex()
+    with pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    ) as connection:
+        channel = connection.channel()
+        channel.basic_publish(
+            exchange="",
+            routing_key="unpicklable_test_job_name input job",
+            body=json.dumps({"var": 2, "job_id": job_id}),
+        )
+        time.sleep(1.0)  # Wait for exception to propagate
+
+    assert len(results_list) == 1
+    assert results_list[0]["status"] == "ERROR"
+    assert "PicklingError" in results_list[0]["message"]
+
+
 from unittest.mock import patch, ANY
 
 

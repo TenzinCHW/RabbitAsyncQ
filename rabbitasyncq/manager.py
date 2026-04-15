@@ -171,23 +171,42 @@ class JobManager:
         except Exception:
             return
 
-        if exc is not None and type(exc).__name__ in [
-            "BrokenProcessPool",
-            "TerminatedWorkerError",
-        ]:
-            ctx = self.jobs.get(job_id)
-            if ctx:
-                self.conn.add_callback_threadsafe(
-                    lambda c=ctx: c.ch.basic_nack(
-                        delivery_tag=c.method.delivery_tag, requeue=False
+        if exc is not None:
+            if type(exc).__name__ in [
+                "BrokenProcessPool",
+                "TerminatedWorkerError",
+            ]:
+                ctx = self.jobs.get(job_id)
+                if ctx:
+                    self.conn.add_callback_threadsafe(
+                        lambda c=ctx: c.ch.basic_nack(
+                            delivery_tag=c.method.delivery_tag, requeue=False
+                        )
                     )
-                )
-                del self.jobs[job_id]
-            print(f"Worker process crashed for job {job_id}: {exc}")
-            import sys
-            import os
+                    del self.jobs[job_id]
+                print(f"Worker process crashed for job {job_id}: {exc}")
+                import sys
+                import os
 
-            os._exit(1)
+                os._exit(1)
+            else:
+                ctx = self.jobs.get(job_id)
+                if ctx:
+                    print(f"Failed to start job {job_id}: {exc}")
+                    err_message = {
+                        "status": "ERROR",
+                        "message": repr(exc),
+                        "job_id": job_id,
+                    }
+                    self.conn.add_callback_threadsafe(
+                        lambda c=ctx, m=err_message: c.messenger.send_msg(
+                            f"{c.name} result", json.dumps(m)
+                        )
+                    )
+                    self.conn.add_callback_threadsafe(
+                        lambda c=ctx: c.messenger.ack_msg(c.method)
+                    )
+                    del self.jobs[job_id]
 
     def accept_job(
         self,
