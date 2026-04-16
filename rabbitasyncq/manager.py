@@ -124,9 +124,20 @@ class JobManager:
 
             if msg_type == "result":
                 payload = msg["payload"]
+                try:
+                    payload_str = json.dumps(payload)
+                except Exception as e:
+                    payload_str = json.dumps(
+                        {
+                            "status": "ERROR",
+                            "message": f"Result Serialization Error: {repr(e)}",
+                            "job_id": job_id,
+                        }
+                    )
+
                 self.conn.add_callback_threadsafe(
-                    lambda c=ctx, p=payload: c.messenger.send_msg(
-                        f"{c.name} result", json.dumps(p)
+                    lambda c=ctx, p=payload_str: c.messenger.send_msg(
+                        f"{c.name} result", p
                     )
                 )
             elif msg_type == "stopped":
@@ -302,8 +313,8 @@ class JobManager:
     def shutdown(self):
         self.conn.add_callback_threadsafe(self.ch.stop_consuming)
 
-        # Signal all running jobs to stop
-        for job_ctx in self.jobs.values():
+        # Signal all running jobs to stop. Use list() to avoid RuntimeError if jobs dict mutates
+        for job_ctx in list(self.jobs.values()):
             job_ctx.stop()
 
         self.ipc_queue.put(None)
