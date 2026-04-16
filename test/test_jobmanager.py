@@ -158,9 +158,9 @@ def job_manager_unpicklable():
     global results_list
     results_list = []
     conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
-    # A lambda is not picklable and will trigger a PicklingError in ProcessPoolExecutor
+    # A lambda is usually not picklable by standard pickle, but cloudpickle handles it
     jm = JobManager(
-        "unpicklable_test_job_name", conn, lambda x: x, handle_exception_result
+        "unpicklable_test_job_name", conn, lambda x: [{"nyaa": 99}], handle_result
     )
     t = threading.Thread(target=jm.start)
     t.start()
@@ -184,11 +184,12 @@ def test_unpicklable_job(job_manager_unpicklable):
             routing_key="unpicklable_test_job_name input job",
             body=json.dumps({"var": 2, "job_id": job_id}),
         )
-        time.sleep(1.0)  # Wait for exception to propagate
+        time.sleep(1.0)  # Wait for results to propagate
 
-    assert len(results_list) == 1
-    assert results_list[0]["status"] == "ERROR"
-    assert "PicklingError" in results_list[0]["message"]
+    assert len(results_list) == 2
+    assert results_list[0]["status"] == "RUNNING"
+    assert results_list[0]["nyaa"] == 99
+    assert results_list[1]["status"] == "SUCCESS"
 
 
 from unittest.mock import patch, ANY

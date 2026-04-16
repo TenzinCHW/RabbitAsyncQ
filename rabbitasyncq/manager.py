@@ -12,6 +12,7 @@ import pika.connection
 import pika.channel
 import pika.frame
 import pika.spec
+import cloudpickle
 
 from .job import process_worker, ProcessJobContext
 from .messaging import Messenger
@@ -30,6 +31,7 @@ class JobManager:
     ):
         self.name = name
         self.job_fn = job_fn
+        self.serialized_job_fn = cloudpickle.dumps(job_fn)
         self.result_fn = result_fn
         self.conn = conn
         self.ch = conn.channel()
@@ -229,7 +231,12 @@ class JobManager:
         self.jobs[job_id] = job_ctx
 
         future = self.executor.submit(
-            process_worker, job_id, self.job_fn, job_data, self.ipc_queue, stop_event
+            process_worker,
+            job_id,
+            self.serialized_job_fn,
+            job_data,
+            self.ipc_queue,
+            stop_event,
         )
         future.add_done_callback(
             functools.partial(self._handle_future_done, job_id=job_id)

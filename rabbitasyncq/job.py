@@ -2,13 +2,17 @@ import json
 import multiprocessing
 from typing import Callable, Any
 import pika
+import cloudpickle
 
 from .messaging import Messenger
 
 
-def process_worker(job_id: str, job_fn: Callable, body: bytes, ipc_queue, stop_event):
+def process_worker(
+    job_id: str, serialized_job_fn: bytes, body: bytes, ipc_queue, stop_event
+):
     print(f"Starting job {job_id}")
     try:
+        job_fn = cloudpickle.loads(serialized_job_fn)
         for result in job_fn(body):
             try:
                 if stop_event.is_set():
