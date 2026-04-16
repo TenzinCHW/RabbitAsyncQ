@@ -6,6 +6,8 @@ import json
 import time
 import threading
 
+results_list = []
+
 
 def dummy_run(body):
     for i in range(body["var"]):
@@ -14,59 +16,255 @@ def dummy_run(body):
 
 
 def exception_run(body):
-    raise ValueError("I'm supposed to raise to make sure library is handling exceptions in job handlers.")
+    raise ValueError(
+        "I'm supposed to raise to make sure library is handling exceptions in job handlers."
+    )
+
+
+def crash_run(body):
+    import os
+    import signal
+
+    os.kill(os.getpid(), signal.SIGKILL)
 
 
 def handle_result(body):
-    if body["status"] == "SUCCESS":
-        assert body["nyaa"] % 5 == 0
+    results_list.append(body)
     print(f"Received results: {body}")
 
 
 def handle_exception_result(body):
-    if body["status"] == "ERROR":
-        print("Got an error from job function")
+    results_list.append(body)
     print(f"Received results: {body}")
 
 
-@fixture(scope="session")
+@fixture(scope="function")
 def job_manager():
-    conn = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
-    jm = lambda: JobManager("test_job_name", conn, dummy_run, handle_result)
-    t = threading.Thread(target=jm)
+    global results_list
+    results_list = []
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    jm = JobManager("test_job_name", conn, dummy_run, handle_result)
+    t = threading.Thread(target=jm.start)
     t.start()
-    yield
-    t.join(timeout=1)
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
 
 
-@fixture
+@fixture(scope="function")
 def job_manager_exception():
-    conn = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
-    jm = lambda: JobManager("fail_test_job_name", conn, exception_run, handle_exception_result)
-    t = threading.Thread(target=jm)
+    global results_list
+    results_list = []
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    jm = JobManager("fail_test_job_name", conn, exception_run, handle_exception_result)
+    t = threading.Thread(target=jm.start)
     t.start()
-    yield
-    t.join(timeout=1)
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
+
+
+@fixture(scope="function")
+def job_manager_crash():
+    global results_list
+    results_list = []
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    jm = JobManager("crash_test_job_name", conn, crash_run, handle_exception_result)
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
 
 
 def test_job(job_manager):
     job_id = os.urandom(15).hex()
-    with pika.BlockingConnection(pika.ConnectionParameters(host="localhost")) as connection:
+    with pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    ) as connection:
         channel = connection.channel()
-        channel.basic_publish(exchange="", routing_key="test_job_name input job", body=json.dumps({"var": 2, "job_id": job_id}))
+        channel.basic_publish(
+            exchange="",
+            routing_key="test_job_name input job",
+            body=json.dumps({"var": 2, "job_id": job_id}),
+        )
+        time.sleep(3.0)  # Wait for job to finish
+
+    # We should have two running results and one success
+    assert len(results_list) == 3
+    assert results_list[0]["status"] == "RUNNING"
+    assert results_list[0]["nyaa"] == 0
+    assert results_list[1]["status"] == "RUNNING"
+    assert results_list[1]["nyaa"] == 5
+    assert results_list[2]["status"] == "SUCCESS"
 
 
 def test_cancel(job_manager):
     job_id = os.urandom(15).hex()
-    with pika.BlockingConnection(pika.ConnectionParameters(host="localhost")) as connection:
+    with pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    ) as connection:
         channel = connection.channel()
-        channel.basic_publish(exchange="", routing_key="test_job_name input job", body=json.dumps({"var": 2, "job_id": job_id}))
-        time.sleep(0.5)
-        channel.basic_publish(exchange="", routing_key="test_job_name stop job", body=json.dumps({"job_id": job_id}))
+        channel.basic_publish(
+            exchange="",
+            routing_key="test_job_name input job",
+            body=json.dumps({"var": 5, "job_id": job_id}),
+        )
+        time.sleep(1.5)
+        channel.basic_publish(
+            exchange="",
+            routing_key="test_job_name stop job",
+            body=json.dumps({"job_id": job_id}),
+        )
+        time.sleep(1.5)  # Wait for stop to propagate
+
+    assert len(results_list) > 0
+    assert any(r["status"] == "STOPPED" for r in results_list)
+    assert not any(r["status"] == "SUCCESS" for r in results_list)
 
 
 def test_exception_run(job_manager_exception):
     job_id = os.urandom(15).hex()
-    with pika.BlockingConnection(pika.ConnectionParameters(host="localhost")) as connection:
+    with pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    ) as connection:
         channel = connection.channel()
-        channel.basic_publish(exchange="", routing_key="fail_test_job_name input job", body=json.dumps({"var": 2, "job_id": job_id}))
+        channel.basic_publish(
+            exchange="",
+            routing_key="fail_test_job_name input job",
+            body=json.dumps({"var": 2, "job_id": job_id}),
+        )
+        time.sleep(1.0)  # Wait for exception to propagate
+
+    assert len(results_list) == 1
+    assert results_list[0]["status"] == "ERROR"
+    assert "ValueError" in results_list[0]["message"]
+
+
+@fixture(scope="function")
+def job_manager_unpicklable():
+    global results_list
+    results_list = []
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    # A lambda is usually not picklable by standard pickle, but cloudpickle handles it
+    jm = JobManager(
+        "unpicklable_test_job_name", conn, lambda x: [{"nyaa": 99}], handle_result
+    )
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
+
+
+def test_unpicklable_job(job_manager_unpicklable):
+    job_id = os.urandom(15).hex()
+    with pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    ) as connection:
+        channel = connection.channel()
+        channel.basic_publish(
+            exchange="",
+            routing_key="unpicklable_test_job_name input job",
+            body=json.dumps({"var": 2, "job_id": job_id}),
+        )
+        time.sleep(1.0)  # Wait for results to propagate
+
+    assert len(results_list) == 2
+    assert results_list[0]["status"] == "RUNNING"
+    assert results_list[0]["nyaa"] == 99
+    assert results_list[1]["status"] == "SUCCESS"
+
+
+class DynamicStateApp:
+    def __init__(self):
+        self.state_var = "initial"
+
+    def dynamic_job(self, body):
+        yield {"state": self.state_var}
+
+
+@fixture(scope="function")
+def job_manager_dynamic():
+    global results_list
+    results_list = []
+
+    app = DynamicStateApp()
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    jm = JobManager("dynamic_test_job_name", conn, app.dynamic_job, handle_result)
+
+    # Mutate state AFTER JobManager initialization
+    app.state_var = "mutated"
+
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
+
+
+def test_dynamic_state_job(job_manager_dynamic):
+    job_id = os.urandom(15).hex()
+    with pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    ) as connection:
+        channel = connection.channel()
+        channel.basic_publish(
+            exchange="",
+            routing_key="dynamic_test_job_name input job",
+            body=json.dumps({"job_id": job_id}),
+        )
+        time.sleep(1.0)
+
+    assert len(results_list) == 2
+    assert results_list[0]["status"] == "RUNNING"
+    # It should pick up the mutated state, not the initial state
+    assert results_list[0]["state"] == "mutated"
+    assert results_list[1]["status"] == "SUCCESS"
+
+
+from unittest.mock import patch, ANY
+
+
+@patch("os._exit")
+def test_worker_hard_crash(mock_os_exit, job_manager_crash):
+    job_id = os.urandom(15).hex()
+
+    with patch.object(job_manager_crash.ch, "basic_nack") as mock_basic_nack:
+        with pika.BlockingConnection(
+            pika.ConnectionParameters(host="localhost")
+        ) as connection:
+            channel = connection.channel()
+            channel.basic_publish(
+                exchange="",
+                routing_key="crash_test_job_name input job",
+                body=json.dumps({"var": 2, "job_id": job_id}),
+            )
+            time.sleep(2.0)  # Wait for crash and callback to execute
+
+        # Verify basic_nack was called with requeue=False
+        assert mock_basic_nack.called
+        mock_basic_nack.assert_called_with(delivery_tag=ANY, requeue=False)
+
+        # Verify os._exit(1) was called
+        mock_os_exit.assert_called_with(1)
