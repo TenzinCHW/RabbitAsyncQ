@@ -31,7 +31,6 @@ class JobManager:
     ):
         self.name = name
         self.job_fn = job_fn
-        self.serialized_job_fn = cloudpickle.dumps(job_fn)
         self.result_fn = result_fn
         self.conn = conn
         self.ch = conn.channel()
@@ -230,10 +229,30 @@ class JobManager:
         )
         self.jobs[job_id] = job_ctx
 
+        try:
+            serialized = cloudpickle.dumps(self.job_fn)
+        except Exception as e:
+            print(f"Failed to serialize job_fn for job {job_id}: {e}")
+            err_message = {
+                "status": "ERROR",
+                "message": f"Serialization Error: {repr(e)}",
+                "job_id": job_id,
+            }
+            self.conn.add_callback_threadsafe(
+                lambda c=job_ctx, m=err_message: c.messenger.send_msg(
+                    f"{c.name} result", json.dumps(m)
+                )
+            )
+            self.conn.add_callback_threadsafe(
+                lambda c=job_ctx: c.messenger.ack_msg(c.method)
+            )
+            del self.jobs[job_id]
+            return
+
         future = self.executor.submit(
             process_worker,
             job_id,
-            self.serialized_job_fn,
+            serialized,
             job_data,
             self.ipc_queue,
             stop_event,

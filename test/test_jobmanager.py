@@ -192,6 +192,57 @@ def test_unpicklable_job(job_manager_unpicklable):
     assert results_list[1]["status"] == "SUCCESS"
 
 
+class DynamicStateApp:
+    def __init__(self):
+        self.state_var = "initial"
+
+    def dynamic_job(self, body):
+        yield {"state": self.state_var}
+
+
+@fixture(scope="function")
+def job_manager_dynamic():
+    global results_list
+    results_list = []
+
+    app = DynamicStateApp()
+    conn = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    jm = JobManager("dynamic_test_job_name", conn, app.dynamic_job, handle_result)
+
+    # Mutate state AFTER JobManager initialization
+    app.state_var = "mutated"
+
+    t = threading.Thread(target=jm.start)
+    t.start()
+    time.sleep(0.5)
+    yield jm
+    if not jm.conn.is_closed:
+        jm.conn.add_callback_threadsafe(jm.ch.stop_consuming)
+    t.join()
+    if not jm.conn.is_closed:
+        jm.conn.close()
+
+
+def test_dynamic_state_job(job_manager_dynamic):
+    job_id = os.urandom(15).hex()
+    with pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    ) as connection:
+        channel = connection.channel()
+        channel.basic_publish(
+            exchange="",
+            routing_key="dynamic_test_job_name input job",
+            body=json.dumps({"job_id": job_id}),
+        )
+        time.sleep(1.0)
+
+    assert len(results_list) == 2
+    assert results_list[0]["status"] == "RUNNING"
+    # It should pick up the mutated state, not the initial state
+    assert results_list[0]["state"] == "mutated"
+    assert results_list[1]["status"] == "SUCCESS"
+
+
 from unittest.mock import patch, ANY
 
 
